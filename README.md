@@ -1,6 +1,6 @@
 # sops-wrapper
 
-Integrated wrapper library for Mozilla SOPS
+Integrated library wrapper for [**Mozilla SOPS**](https://github.com/mozilla/sops), ideal for run encryption/decryption on apps and web services.
 
 ## Usage
 
