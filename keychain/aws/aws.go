@@ -12,12 +12,15 @@ import (
 const Alias = "aws/kms"
 
 func NewKeyGroup(key entities.EncryptionKey) (result keys.MasterKey) {
+	var id string
+	if key.Role == "" {
+	  id = key.ID
+	} else {
+	  id = fmt.Sprintf("%s+%s",key.ID,key.Role)
+	}
+	
 	result = kms.NewMasterKeyFromArn(
-		fmt.Sprintf(
-			"%s+%s",
-			key.ID,
-			key.Role,
-		),
+		id,
 		kms.ParseKMSContext(key.Context),
 		"",
 	)
