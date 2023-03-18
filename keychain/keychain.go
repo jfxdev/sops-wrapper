@@ -6,6 +6,7 @@ import (
 	"github.com/jfxdev/sops-wrapper/keychain/aws"
 	"github.com/jfxdev/sops-wrapper/keychain/entities"
 	"github.com/jfxdev/sops-wrapper/keychain/gcp"
+	"github.com/jfxdev/sops-wrapper/keychain/vault"
 
 	"go.mozilla.org/sops/keys"
 )
@@ -17,6 +18,7 @@ var keyStore = make(map[string]KeyGroupFunc)
 func init() {
 	keyStore[aws.Alias] = aws.NewKeyGroup
 	keyStore[gcp.Alias] = gcp.NewKeyGroup
+	keyStore[vault.Alias] = vault.NewKeyGroup
 }
 
 func KeyGroup(alias string) (result KeyGroupFunc, err error) {
