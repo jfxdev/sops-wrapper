@@ -10,8 +10,10 @@ import (
 const Alias = "vault/kms"
 
 func NewKeyGroup(key entities.EncryptionKey) (result keys.MasterKey) {
-	result, _ = hcvault.NewMasterKeyFromURI(
-		key.ID,
+	result = hcvault.NewMasterKey(
+		key.Parameters["url"],
+		key.Parameters["engine_path"],
+		key.Parameters["key_path"],
 	)
 	return
 }
