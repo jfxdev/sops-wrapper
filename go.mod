@@ -91,4 +91,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
 
-require github.com/opencontainers/runc v1.1.2 // indirect
+require github.com/opencontainers/runc v1.1.5 // indirect
