@@ -1,21 +1,17 @@
-package vault
+package azure
 
 import (
 	"context"
 
 	"github.com/jfxdev/sops-wrapper/keychain/entities"
-
 	"go.mozilla.org/sops/keys"
-	"go.mozilla.org/sops/v3/hcvault"
+	"go.mozilla.org/sops/v3/azkv"
 )
 
-const Alias = "vault/kms"
+const Alias = "azure/kv"
 
 func NewKeyGroup(ctx context.Context, key entities.EncryptionKey) (result keys.MasterKey) {
-	result = hcvault.NewMasterKey(
-		key.Parameters["url"],
-		key.Parameters["engine_path"],
-		key.Parameters["key_path"],
-	)
+	// azkv.NewMasterKeyFromURL returns (MasterKey, error)
+	result, _ = azkv.NewMasterKeyFromURL(key.ID)
 	return
 }

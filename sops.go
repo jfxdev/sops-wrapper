@@ -1,11 +1,12 @@
 package sops
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
-	"github.com/jfxdev/sops-saas/keychain"
-	"github.com/jfxdev/sops-saas/keychain/entities"
+	"github.com/jfxdev/sops-wrapper/keychain"
+	"github.com/jfxdev/sops-wrapper/keychain/entities"
 
 	"go.mozilla.org/sops/v3"
 	"go.mozilla.org/sops/v3/aes"
@@ -16,28 +17,39 @@ import (
 	"go.mozilla.org/sops/v3/version"
 )
 
+type DataFormat string
+
 const (
-	formatYaml = "yaml"
-	formatJson = "json"
+	FormatYAML DataFormat = "yaml"
+	FormatJSON DataFormat = "json"
 )
 
-type Cypher interface {
-	Decrypt(content []byte, config string) ([]byte, error)
-	Encrypt(data []byte, config EncryptionConfig) ([]byte, error)
+type Cipher interface {
+	Decrypt(ctx context.Context, content []byte, format DataFormat) ([]byte, error)
+	Encrypt(ctx context.Context, data []byte, config EncryptionConfig) ([]byte, error)
+	Rotate(ctx context.Context, encryptedContent []byte, newConfig EncryptionConfig) ([]byte, error)
 }
 
-type cypher struct{}
-
-func NewCypher() Cypher {
-	return &cypher{}
+type cipher struct {
+	keyServiceClient keyservice.KeyServiceClient
 }
 
-func (c *cypher) Decrypt(content []byte, format string) ([]byte, error) {
-	return decrypt.Data(content, format)
+func NewCipher() Cipher {
+	return &cipher{
+		keyServiceClient: keyservice.NewLocalClient(),
+	}
+}
+
+func (c *cipher) Decrypt(ctx context.Context, content []byte, format DataFormat) ([]byte, error) {
+	if format != FormatYAML && format != FormatJSON {
+		return nil, fmt.Errorf("unsupported format: %s", format)
+	}
+	
+	return decrypt.Data(content, string(format))
 }
 
 type EncryptionConfig struct {
-	Format            string
+	Format            DataFormat
 	Keys              []entities.EncryptionKey
 	UnencryptedSuffix string
 	EncryptedSuffix   string
@@ -46,33 +58,32 @@ type EncryptionConfig struct {
 	ShamirThreshold   int
 }
 
-func (m *cypher) Encrypt(content []byte, config EncryptionConfig) (result []byte, err error) {
+func (c *cipher) Encrypt(ctx context.Context, content []byte, config EncryptionConfig) ([]byte, error) {
 	var store common.Store
 	switch config.Format {
-	case formatYaml:
+	case FormatYAML:
 		store = common.StoreForFormat(formats.Yaml)
-	default:
+	case FormatJSON:
 		store = common.StoreForFormat(formats.Json)
+	default:
+		return nil, fmt.Errorf("unsupported format: %s", config.Format)
 	}
 
 	branches, err := store.LoadPlainFile(content)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to load plain file: %w", err)
 	}
 
 	var groups []sops.KeyGroup
-	var keyGroup sops.KeyGroup
 
 	for _, k := range config.Keys {
 		gfunc, err := keychain.KeyGroup(k.Platform)
 		if err != nil {
-			return result, err
+			return nil, fmt.Errorf("failed to get keygroup for platform %s: %w", k.Platform, err)
 		}
 
-		keyGroup = append(keyGroup, gfunc(k))
+		groups = append(groups, sops.KeyGroup{gfunc(ctx, k)})
 	}
-
-	groups = append(groups, keyGroup)
 
 	tree := sops.Tree{
 		Branches: branches,
@@ -88,11 +99,11 @@ func (m *cypher) Encrypt(content []byte, config EncryptionConfig) (result []byte
 	}
 
 	dataKey, errs := tree.GenerateDataKeyWithKeyServices(
-		[]keyservice.KeyServiceClient{keyservice.NewLocalClient()},
+		[]keyservice.KeyServiceClient{c.keyServiceClient},
 	)
 
 	if len(errs) > 0 {
-		return nil, errors.New(fmt.Sprint("Could not generate data key:", errs))
+		return nil, fmt.Errorf("could not generate data key: %w", errors.Join(errs...))
 	}
 
 	encryptTreeOpts := common.EncryptTreeOpts{
@@ -102,8 +113,27 @@ func (m *cypher) Encrypt(content []byte, config EncryptionConfig) (result []byte
 	}
 	err = common.EncryptTree(encryptTreeOpts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to encrypt tree: %w", err)
 	}
 
-	return store.EmitEncryptedFile(tree)
+	encBytes, err := store.EmitEncryptedFile(tree)
+	if err != nil {
+		return nil, fmt.Errorf("failed to emit encrypted file: %w", err)
+	}
+
+	return encBytes, nil
+}
+
+func (c *cipher) Rotate(ctx context.Context, encryptedContent []byte, newConfig EncryptionConfig) ([]byte, error) {
+	plainContent, err := c.Decrypt(ctx, encryptedContent, newConfig.Format)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt content during rotation: %w", err)
+	}
+
+	rotatedContent, err := c.Encrypt(ctx, plainContent, newConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt content with new keys: %w", err)
+	}
+
+	return rotatedContent, nil
 }

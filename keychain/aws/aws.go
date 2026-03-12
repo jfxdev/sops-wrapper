@@ -1,9 +1,10 @@
 package aws
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/jfxdev/sops-saas/keychain/entities"
+	"github.com/jfxdev/sops-wrapper/keychain/entities"
 
 	"go.mozilla.org/sops/keys"
 	"go.mozilla.org/sops/v3/kms"
@@ -11,7 +12,7 @@ import (
 
 const Alias = "aws/kms"
 
-func NewKeyGroup(key entities.EncryptionKey) (result keys.MasterKey) {
+func NewKeyGroup(ctx context.Context, key entities.EncryptionKey) (result keys.MasterKey) {
 	var id string
 	if key.Role == "" {
 	  id = key.ID

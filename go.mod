@@ -1,4 +1,4 @@
-module github.com/jfxdev/sops-saas
+module github.com/jfxdev/sops-wrapper
 
 go 1.24.0
 
